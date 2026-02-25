@@ -1,0 +1,810 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Хлопковая Саванна: Кликер</title>
+    <style>
+        :root {
+            --sky-top: #2c003e;
+            --sky-mid: #51004d;
+            --sky-horizon: #ff6f00;
+            --sun-core: #fff;
+            --sun-glow: #ffca28;
+            --ground-far: #3e2723;
+            --ground-mid: #5d4037;
+            --ground-near: #795548;
+            --grass: #33691e;
+            --ui-bg: #fff8e1;
+            --ui-border: #5d4037;
+            --text-main: #3e2723;
+            --accent: #ff6f00;
+            --cotton-white: #f5f5f5;
+        }
+
+        * {
+            box-sizing: border-box;
+            user-select: none;
+            -webkit-tap-highlight-color: transparent;
+            cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="white" stroke="black" stroke-width="2"/></svg>') 12 12, auto;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            background: linear-gradient(to bottom, var(--sky-top) 0%, var(--sky-mid) 40%, var(--sky-horizon) 100%);
+            height: 100vh;
+            width: 100vw;
+            display: flex;
+            justify-content: center;
+            align-items: flex-end;
+            perspective: 1000px;
+        }
+
+        /* --- Parallax Background --- */
+        .scene {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 0;
+            overflow: hidden;
+        }
+
+        .sun {
+            position: absolute;
+            top: 10%;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 180px;
+            height: 180px;
+            background: radial-gradient(circle, var(--sun-core) 10%, var(--sun-glow) 40%, transparent 70%);
+            border-radius: 50%;
+            box-shadow: 0 0 80px var(--sun-glow), 0 0 150px rgba(255, 111, 0, 0.6);
+            animation: sunPulse 6s infinite ease-in-out;
+            z-index: 1;
+        }
+
+        .cloud {
+            position: absolute;
+            background: rgba(255, 255, 255, 0.15);
+            border-radius: 50px;
+            filter: blur(8px);
+            animation: floatCloud linear infinite;
+        }
+
+        .mountains {
+            position: absolute;
+            bottom: 25%;
+            width: 120%;
+            left: -10%;
+            height: 300px;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1200 300' preserveAspectRatio='none'%3E%3Cpath d='M0,300 L0,100 C200,50 400,200 600,100 C800,0 1000,200 1200,100 L1200,300 Z' fill='%23281815' opacity='0.8'/%3E%3C/svg%3E");
+            background-size: cover;
+            z-index: 2;
+        }
+
+        .hills {
+            position: absolute;
+            bottom: 20%;
+            width: 110%;
+            left: -5%;
+            height: 200px;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1200 300' preserveAspectRatio='none'%3E%3Cpath d='M0,300 L0,150 Q300,50 600,150 T1200,150 L1200,300 Z' fill='%234e342e' opacity='0.9'/%3E%3C/svg%3E");
+            background-size: cover;
+            z-index: 3;
+        }
+
+        /* --- Ground & Game Area --- */
+        .ground-container {
+            position: relative;
+            width: 100%;
+            height: 35%;
+            background: linear-gradient(to bottom, var(--ground-mid), var(--ground-near));
+            z-index: 10;
+            display: flex;
+            justify-content: center;
+            align-items: flex-end;
+            box-shadow: 0 -10px 30px rgba(0,0,0,0.5);
+            transform: rotateX(10deg);
+            transform-origin: bottom;
+        }
+
+        .grass-layer {
+            position: absolute;
+            top: 0;
+            width: 100%;
+            height: 40px;
+            background: var(--grass);
+            mask-image: linear-gradient(to bottom, black 50%, transparent 100%);
+            -webkit-mask-image: linear-gradient(to bottom, black 50%, transparent 100%);
+            opacity: 0.8;
+        }
+
+        .plantation-area {
+            position: relative;
+            width: 90%;
+            max-width: 1100px;
+            height: 400px;
+            display: flex;
+            justify-content: center;
+            align-items: flex-end;
+            flex-wrap: wrap;
+            gap: 10px;
+            padding-bottom: 40px;
+            z-index: 20;
+        }
+
+        /* --- Worker Model --- */
+        .worker-wrapper {
+            position: relative;
+            width: 120px;
+            height: 180px;
+            cursor: pointer;
+            transition: transform 0.1s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            will-change: transform;
+            z-index: 30;
+        }
+
+        .worker-wrapper:active {
+            transform: scale(0.92) translateY(5px);
+        }
+
+        .worker-svg {
+            width: 100%;
+            height: 100%;
+            filter: drop-shadow(0 10px 5px rgba(0,0,0,0.4));
+            overflow: visible;
+        }
+
+        /* Animations */
+        .worker-body {
+            animation: breathe 3s infinite ease-in-out;
+            transform-origin: center bottom;
+        }
+
+        .worker-arm {
+            transform-origin: 45px 55px;
+            animation: idleArm 2s infinite ease-in-out;
+        }
+
+        .worker-wrapper.clicked .worker-arm {
+            animation: workArm 0.3s ease-out forwards;
+        }
+
+        .worker-wrapper.clicked .worker-body {
+            animation: workBody 0.3s ease-out forwards;
+        }
+
+        .sweat-drop {
+            opacity: 0;
+            transform: translateY(0);
+        }
+
+        .worker-wrapper.clicked .sweat-drop {
+            animation: sweatDrop 0.5s ease-out forwards;
+        }
+
+        .eye-blink {
+            transform-origin: center;
+            animation: blink 4s infinite;
+            transform-box: fill-box;
+        }
+
+        /* Cotton Bush */
+        .crop-bush {
+            position: absolute;
+            bottom: -10px;
+            width: 90px;
+            height: 70px;
+            z-index: -1;
+            filter: drop-shadow(0 5px 3px rgba(0,0,0,0.3));
+        }
+
+        .cotton-ball {
+            animation: cottonPop 0.4s ease-out;
+            transform-origin: center;
+        }
+
+        /* --- UI Dashboard --- */
+        .dashboard {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            width: 300px;
+            background: var(--ui-bg);
+            border: 4px solid var(--ui-border);
+            border-radius: 15px;
+            padding: 20px;
+            box-shadow: 0 15px 30px rgba(0,0,0,0.4), inset 0 0 20px rgba(93, 64, 55, 0.2);
+            z-index: 100;
+            background-image: url("data:image/svg+xml,%3Csvg width='20' height='20' viewBox='0 0 20 20' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='%23d7ccc8' fill-opacity='0.4' fill-rule='evenodd'%3E%3Ccircle cx='3' cy='3' r='3'/%3E%3Ccircle cx='13' cy='13' r='3'/%3E%3C/g%3E%3C/svg%3E");
+            cursor: default;
+        }
+
+        .dashboard-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 15px;
+            border-bottom: 2px solid rgba(93, 64, 55, 0.2);
+            padding-bottom: 10px;
+        }
+
+        .icon-badge {
+            width: 40px;
+            height: 40px;
+            background: var(--accent);
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            color: white;
+            font-weight: bold;
+            font-size: 1.2rem;
+            box-shadow: 0 4px 0 #bf360c;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .stat-box {
+            background: rgba(255,255,255,0.6);
+            padding: 10px;
+            border-radius: 8px;
+            text-align: center;
+            border: 1px solid rgba(93, 64, 55, 0.1);
+        }
+
+        .stat-label {
+            font-size: 0.75rem;
+            color: #6d4c41;
+            text-transform: uppercase;
+            font-weight: 700;
+        }
+
+        .stat-value {
+            font-size: 1.4rem;
+            color: var(--text-main);
+            font-weight: 800;
+            font-family: 'Courier New', monospace;
+        }
+
+        .upgrades-list {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .upgrade-card {
+            background: white;
+            border: 2px solid var(--ui-border);
+            border-radius: 8px;
+            padding: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            cursor: pointer;
+            transition: all 0.2s;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .upgrade-card:hover:not(:disabled) {
+            transform: translateX(5px);
+            background: #fff3e0;
+            border-color: var(--accent);
+        }
+
+        .upgrade-card:active:not(:disabled) {
+            transform: scale(0.98);
+        }
+
+        .upgrade-card:disabled {
+            opacity: 0.6;
+            filter: grayscale(1);
+            cursor: not-allowed;
+        }
+
+        .upgrade-info h4 {
+            margin: 0;
+            font-size: 0.9rem;
+            color: var(--text-main);
+        }
+
+        .upgrade-info p {
+            margin: 2px 0 0;
+            font-size: 0.7rem;
+            color: #8d6e63;
+        }
+
+        .upgrade-price {
+            background: var(--text-main);
+            color: white;
+            padding: 5px 10px;
+            border-radius: 12px;
+            font-size: 0.8rem;
+            font-weight: bold;
+            box-shadow: 0 2px 0 rgba(0,0,0,0.2);
+        }
+
+        /* --- Particles & Effects --- */
+        .floating-text {
+            position: absolute;
+            font-weight: 900;
+            font-size: 1.5rem;
+            pointer-events: none;
+            z-index: 60;
+            text-shadow: 0 2px 0 rgba(0,0,0,0.3);
+            animation: floatUp 0.8s cubic-bezier(0.25, 1, 0.5, 1) forwards;
+            white-space: nowrap;
+            color: #fff;
+        }
+
+        .cotton-particle {
+            position: absolute;
+            width: 16px;
+            height: 16px;
+            background: radial-gradient(circle at 30% 30%, #fff, #e0e0e0);
+            border-radius: 50%;
+            pointer-events: none;
+            z-index: 50;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+            animation: cottonFloat 1s ease-out forwards;
+        }
+
+        /* --- Keyframes --- */
+        @keyframes sunPulse {
+            0%, 100% { transform: translateX(-50%) scale(1); opacity: 0.9; }
+            50% { transform: translateX(-50%) scale(1.05); opacity: 1; }
+        }
+
+        @keyframes floatCloud {
+            from { transform: translateX(-200px); }
+            to { transform: translateX(120vw); }
+        }
+
+        @keyframes breathe {
+            0%, 100% { transform: scaleY(1); }
+            50% { transform: scaleY(1.02); }
+        }
+
+        @keyframes idleArm {
+            0%, 100% { transform: rotate(0deg); }
+            50% { transform: rotate(5deg); }
+        }
+
+        @keyframes workArm {
+            0% { transform: rotate(0deg); }
+            50% { transform: rotate(-60deg); }
+            100% { transform: rotate(0deg); }
+        }
+
+        @keyframes workBody {
+            0% { transform: scaleY(1); }
+            50% { transform: scaleY(0.95) scaleX(1.05); }
+            100% { transform: scaleY(1); }
+        }
+
+        @keyframes blink {
+            0%, 48%, 52%, 100% { transform: scaleY(1); }
+            50% { transform: scaleY(0.1); }
+        }
+
+        @keyframes sweatDrop {
+            0% { opacity: 1; transform: translateY(0) scale(1); }
+            100% { opacity: 0; transform: translateY(20px) scale(0.5); }
+        }
+
+        @keyframes floatUp {
+            0% { transform: translateY(0) scale(0.8); opacity: 0; }
+            20% { transform: translateY(-10px) scale(1.2); opacity: 1; }
+            100% { transform: translateY(-60px) scale(1); opacity: 0; }
+        }
+
+        @keyframes cottonFloat {
+            0% { transform: translateY(0) rotate(0deg) scale(0.5); opacity: 0; }
+            20% { opacity: 1; transform: translateY(-10px) rotate(45deg) scale(1); }
+            100% { transform: translateY(-100px) rotate(360deg) scale(1.2); opacity: 0; }
+        }
+
+        @keyframes cottonPop {
+            0% { transform: scale(0); }
+            60% { transform: scale(1.2); }
+            100% { transform: scale(1); }
+        }
+
+    </style>
+</head>
+<body>
+
+    <!-- Parallax Background -->
+    <div class="scene">
+        <div class="sun"></div>
+        <div class="cloud" style="top: 15%; left: -20%; width: 200px; height: 60px; animation-duration: 25s;"></div>
+        <div class="cloud" style="top: 25%; left: -10%; width: 150px; height: 40px; animation-duration: 35s; animation-delay: -10s;"></div>
+        <div class="mountains"></div>
+        <div class="hills"></div>
+    </div>
+
+    <!-- Game Ground -->
+    <div class="ground-container">
+        <div class="grass-layer"></div>
+        <div class="plantation-area" id="plantationArea">
+            <!-- Workers injected here -->
+        </div>
+    </div>
+
+    <!-- UI Dashboard -->
+    <div class="dashboard">
+        <div class="dashboard-header">
+            <div class="icon-badge">☁️</div>
+            <div>
+                <h2 style="margin: 0; color: var(--text-main);">Хлопковая Плантация</h2>
+                <span style="font-size: 0.8rem; color: #8d6e63;">Уровень 1</span>
+            </div>
+        </div>
+
+        <div class="stats-grid">
+            <div class="stat-box">
+                <div class="stat-label">Собрано хлопка</div>
+                <div class="stat-value" id="score">0</div>
+            </div>
+            <div class="stat-box">
+                <div class="stat-label">В секунду</div>
+                <div class="stat-value" id="autoIncome" style="color: var(--accent);">0</div>
+            </div>
+        </div>
+
+        <div class="upgrades-list">
+            <button class="upgrade-card" id="btnHire" onclick="game.buyUpgrade('hire')">
+                <div class="upgrade-info">
+                    <h4>Нанять работника</h4>
+                    <p>+1 Работник</p>
+                </div>
+                <div class="upgrade-price" id="costHire">50</div>
+            </button>
+
+            <button class="upgrade-card" id="btnTool" onclick="game.buyUpgrade('tool')">
+                <div class="upgrade-info">
+                    <h4>Острый серп</h4>
+                    <p>+2 к клику</p>
+                </div>
+                <div class="upgrade-price" id="costTool">100</div>
+            </button>
+
+            <button class="upgrade-card" id="btnFertilizer" onclick="game.buyUpgrade('fertilizer')">
+                <div class="upgrade-info">
+                    <h4>Удобрения</h4>
+                    <p>+5 авто-урожай</p>
+                </div>
+                <div class="upgrade-price" id="costFertilizer">200</div>
+            </button>
+        </div>
+    </div>
+
+    <script>
+        // --- Game State ---
+        const state = {
+            score: 0,
+            workers: 0,
+            clickPower: 1,
+            autoIncome: 0,
+            costs: {
+                hire: 50,
+                tool: 100,
+                fertilizer: 200
+            }
+        };
+
+        // --- SVG Assets ---
+        
+        const workerSVG = `
+            <svg class="worker-svg" viewBox="0 0 120 180" xmlns="http://www.w3.org/2000/svg">
+                <defs>
+                    <pattern id="skinPattern" x="0" y="0" width="10" height="10" patternUnits="userSpaceOnUse">
+                        <rect width="10" height="10" fill="#5d4037"/>
+                        <circle cx="5" cy="5" r="1" fill="#4e342e" opacity="0.3"/>
+                    </pattern>
+                    <pattern id="clothPattern" x="0" y="0" width="20" height="20" patternUnits="userSpaceOnUse">
+                        <rect width="20" height="20" fill="#ff7043"/>
+                        <path d="M0 0 L20 20 M20 0 L0 20" stroke="#d84315" stroke-width="2" opacity="0.5"/>
+                    </pattern>
+                    <filter id="shadow">
+                        <feDropShadow dx="0" dy="4" stdDeviation="3" flood-opacity="0.3"/>
+                    </filter>
+                </defs>
+
+                <!-- Shadow on ground -->
+                <ellipse cx="60" cy="175" rx="40" ry="8" fill="rgba(0,0,0,0.3)" filter="blur(4px)"/>
+
+                <!-- Legs -->
+                <g class="worker-legs">
+                    <path d="M45 120 L45 165 Q45 175 55 175 L65 175 Q75 175 75 165 L75 120" fill="#3e2723"/>
+                    <rect x="40" y="165" width="40" height="10" rx="5" fill="#281815"/>
+                </g>
+
+                <!-- Body Group (Animated) -->
+                <g class="worker-body">
+                    <!-- Torso -->
+                    <path d="M40 50 L80 50 L85 120 L35 120 Z" fill="url(#clothPattern)" filter="url(#shadow)"/>
+                    <!-- Belt -->
+                    <rect x="35" y="110" width="50" height="8" fill="#3e2723"/>
+                    <circle cx="60" cy="114" r="3" fill="#ffd700"/>
+                    
+                    <!-- Head Group -->
+                    <g transform="translate(60, 35)">
+                        <!-- Neck -->
+                        <rect x="-8" y="15" width="16" height="10" fill="#5d4037"/>
+                        <!-- Head Shape -->
+                        <ellipse cx="0" cy="0" rx="24" ry="28" fill="url(#skinPattern)" filter="url(#shadow)"/>
+                        
+                        <!-- Face Details -->
+                        <ellipse cx="0" cy="5" rx="20" ry="18" fill="#4e342e" opacity="0.2"/>
+                        
+                        <!-- Eyes (Fixed Positioning) -->
+                        <g class="eye-blink">
+                            <ellipse cx="-8" cy="-5" rx="5" ry="6" fill="white"/>
+                            <circle cx="-6" cy="-5" r="2" fill="black"/>
+                            <ellipse cx="8" cy="-5" rx="5" ry="6" fill="white"/>
+                            <circle cx="10" cy="-5" r="2" fill="black"/>
+                            <!-- Eyebrows -->
+                            <path d="M-12 -12 Q-8 -14 -4 -12" stroke="#3e2723" stroke-width="2" fill="none"/>
+                            <path d="M4 -12 Q8 -14 12 -12" stroke="#3e2723" stroke-width="2" fill="none"/>
+                        </g>
+
+                        <!-- Mouth -->
+                        <path d="M-6 12 Q0 16 6 12" stroke="white" stroke-width="2" fill="none" stroke-linecap="round"/>
+                        
+                        <!-- Headband -->
+                        <rect x="-26" y="-15" width="52" height="10" rx="2" fill="#fdd835"/>
+                        <circle cx="0" cy="-10" r="5" fill="#d32f2f"/>
+                        <path d="M-26 -10 L26 -10" stroke="#fbc02d" stroke-width="2"/>
+                    </g>
+
+                    <!-- Arms Group (Animated) -->
+                    <g class="worker-arm">
+                        <!-- Left Arm -->
+                        <path d="M40 55 Q20 80 30 100" stroke="#5d4037" stroke-width="12" fill="none" stroke-linecap="round"/>
+                        <circle cx="30" cy="100" r="8" fill="#5d4037"/>
+                        
+                        <!-- Right Arm (Holding Sickle) -->
+                        <path d="M80 55 Q100 80 90 100" stroke="#5d4037" stroke-width="12" fill="none" stroke-linecap="round"/>
+                        <circle cx="90" cy="100" r="8" fill="#5d4037"/>
+                        
+                        <!-- Sickle Tool (Crescent Shape) -->
+                        <g transform="translate(95, 95) rotate(-45)">
+                            <!-- Handle -->
+                            <rect x="-3" y="0" width="6" height="40" fill="#795548"/>
+                            <!-- Blade (Crescent) -->
+                            <path d="M-3 0 Q-20 10 -3 20 Q10 10 -3 0" fill="#90a4ae" stroke="#546e7a" stroke-width="1"/>
+                            <path d="M-3 0 Q10 5 -3 20" fill="none" stroke="#cfd8dc" stroke-width="1"/>
+                        </g>
+                    </g>
+
+                    <!-- Sweat Drop (Hidden by default) -->
+                    <path class="sweat-drop" d="M85 20 Q90 15 95 20 Q90 30 85 20" fill="#4fc3f7" transform="translate(-25, 0)"/>
+                </g>
+            </svg>
+        `;
+
+        const cottonBushSVG = `
+            <svg class="crop-bush" viewBox="0 0 100 80">
+                <defs>
+                    <radialGradient id="leafGrad" cx="30%" cy="30%" r="70%">
+                        <stop offset="0%" stop-color="#66bb6a"/>
+                        <stop offset="100%" stop-color="#2e7d32"/>
+                    </radialGradient>
+                </defs>
+                <!-- Base Leaves -->
+                <path d="M10 60 Q50 0 90 60 Q50 80 10 60" fill="url(#leafGrad)" stroke="#1b5e20" stroke-width="2"/>
+                <path d="M20 50 Q50 10 80 50" fill="none" stroke="#1b5e20" stroke-width="2" opacity="0.3"/>
+                
+                <!-- Cotton Balls (Fluff) -->
+                <g class="cotton-ball">
+                    <circle cx="35" cy="35" r="10" fill="#fff" filter="drop-shadow(0 2px 2px rgba(0,0,0,0.2))"/>
+                    <circle cx="45" cy="30" r="10" fill="#fff" filter="drop-shadow(0 2px 2px rgba(0,0,0,0.2))"/>
+                    <circle cx="40" cy="40" r="10" fill="#fff" filter="drop-shadow(0 2px 2px rgba(0,0,0,0.2))"/>
+                    
+                    <circle cx="65" cy="40" r="10" fill="#fff" filter="drop-shadow(0 2px 2px rgba(0,0,0,0.2))"/>
+                    <circle cx="75" cy="35" r="10" fill="#fff" filter="drop-shadow(0 2px 2px rgba(0,0,0,0.2))"/>
+                    <circle cx="70" cy="45" r="10" fill="#fff" filter="drop-shadow(0 2px 2px rgba(0,0,0,0.2))"/>
+                </g>
+            </svg>
+        `;
+
+        // --- Core Logic ---
+        const game = {
+            init() {
+                this.updateUI();
+                this.spawnWorker();
+                this.startAutoIncome();
+                this.addBackgroundDetails();
+                this.setupGlobalClick();
+            },
+
+            addScore(amount) {
+                state.score += amount;
+                this.updateUI();
+            },
+
+            spawnWorker() {
+                const area = document.getElementById('plantationArea');
+                const wrapper = document.createElement('div');
+                wrapper.className = 'worker-wrapper';
+                wrapper.innerHTML = workerSVG + cottonBushSVG;
+                
+                // Interaction
+                const handleInteract = (e) => {
+                    e.preventDefault();
+                    e.stopPropagation(); 
+                    this.triggerAllWorkers(e);
+                };
+
+                wrapper.addEventListener('mousedown', handleInteract);
+                wrapper.addEventListener('touchstart', handleInteract, {passive: false});
+
+                area.appendChild(wrapper);
+                state.workers++;
+                this.updateUI();
+            },
+
+            setupGlobalClick() {
+                document.addEventListener('click', (e) => {
+                    // Ignore clicks on UI
+                    if (e.target.closest('.dashboard') || e.target.closest('.upgrade-card')) {
+                        return;
+                    }
+                    this.triggerAllWorkers(e);
+                });
+            },
+
+            triggerAllWorkers(event) {
+                const workers = document.querySelectorAll('.worker-wrapper');
+                
+                workers.forEach((worker, index) => {
+                    // Stagger animations slightly for visual effect
+                    setTimeout(() => {
+                        worker.classList.remove('clicked');
+                        void worker.offsetWidth; 
+                        worker.classList.add('clicked');
+                    }, index * 30);
+                });
+
+                this.addScore(state.clickPower * workers.length);
+
+                // Get coordinates for effects
+                let x, y;
+                if (event.touches) {
+                    x = event.touches[0].clientX;
+                    y = event.touches[0].clientY;
+                } else {
+                    x = event.clientX;
+                    y = event.clientY;
+                }
+
+                // Spawn particles for each worker
+                workers.forEach((worker, index) => {
+                    const rect = worker.getBoundingClientRect();
+                    const centerX = rect.left + rect.width / 2;
+                    const centerY = rect.top + rect.height / 2;
+                    
+                    setTimeout(() => {
+                        this.createFloatingText(centerX, centerY, `+${state.clickPower}`);
+                        this.createCottonParticle(centerX, centerY);
+                    }, index * 30);
+                });
+            },
+
+            createFloatingText(x, y, text) {
+                const el = document.createElement('div');
+                el.className = 'floating-text';
+                el.textContent = text;
+                el.style.left = `${x}px`;
+                el.style.top = `${y - 50}px`;
+                document.body.appendChild(el);
+                setTimeout(() => el.remove(), 800);
+            },
+
+            createCottonParticle(x, y) {
+                const cotton = document.createElement('div');
+                cotton.className = 'cotton-particle';
+                // Randomize start position slightly
+                const offsetX = (Math.random() - 0.5) * 40;
+                cotton.style.left = `${x + offsetX}px`;
+                cotton.style.top = `${y - 20}px`;
+                document.body.appendChild(cotton);
+                setTimeout(() => cotton.remove(), 1000);
+            },
+
+            buyUpgrade(type) {
+                const cost = state.costs[type];
+                if (state.score >= cost) {
+                    state.score -= cost;
+                    
+                    if (type === 'hire') {
+                        this.spawnWorker();
+                        state.costs.hire = Math.floor(state.costs.hire * 1.5);
+                    } else if (type === 'tool') {
+                        state.clickPower += 2;
+                        state.costs.tool = Math.floor(state.costs.tool * 1.7);
+                    } else if (type === 'fertilizer') {
+                        state.autoIncome += 5;
+                        state.costs.fertilizer = Math.floor(state.costs.fertilizer * 1.8);
+                    }
+
+                    this.updateUI();
+                }
+            },
+
+            startAutoIncome() {
+                setInterval(() => {
+                    if (state.autoIncome > 0) {
+                        this.addScore(state.autoIncome);
+                        const area = document.getElementById('plantationArea');
+                        if(area.children.length > 0) {
+                            const idx = Math.floor(Math.random() * area.children.length);
+                            const worker = area.children[idx];
+                            worker.classList.add('clicked');
+                            setTimeout(() => worker.classList.remove('clicked'), 200);
+                            
+                            // Visual for auto income
+                            const rect = worker.getBoundingClientRect();
+                            this.createCottonParticle(rect.left + rect.width/2, rect.top);
+                        }
+                    }
+                }, 1000);
+            },
+
+            updateUI() {
+                document.getElementById('score').textContent = Math.floor(state.score);
+                document.getElementById('autoIncome').textContent = state.autoIncome;
+
+                this.updateButton('btnHire', 'costHire', state.costs.hire);
+                this.updateButton('btnTool', 'costTool', state.costs.tool);
+                this.updateButton('btnFertilizer', 'costFertilizer', state.costs.fertilizer);
+            },
+
+            updateButton(btnId, costId, cost) {
+                const btn = document.getElementById(btnId);
+                document.getElementById(costId).textContent = cost;
+                btn.disabled = state.score < cost;
+            },
+
+            addBackgroundDetails() {
+                const scene = document.querySelector('.scene');
+                for(let i=0; i<5; i++) {
+                    const tree = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+                    tree.setAttribute("viewBox", "0 0 100 100");
+                    tree.style.position = "absolute";
+                    tree.style.bottom = "25%";
+                    tree.style.left = `${Math.random() * 90 + 5}%`;
+                    tree.style.width = `${Math.random() * 100 + 100}px`;
+                    tree.style.height = `${Math.random() * 100 + 100}px`;
+                    tree.style.zIndex = Math.floor(Math.random() * 2) + 2;
+                    tree.style.opacity = 0.6 + Math.random() * 0.4;
+                    
+                    tree.innerHTML = `
+                        <path d="M50 100 L50 60 Q20 60 20 40 Q50 20 80 40 Q80 60 50 60" fill="#3e2723"/>
+                        <rect x="45" y="60" width="10" height="40" fill="#3e2723"/>
+                    `;
+                    scene.appendChild(tree);
+                }
+            }
+        };
+
+        // Start
+        game.init();
+
+    </script>
+</body>
+</html>
+
